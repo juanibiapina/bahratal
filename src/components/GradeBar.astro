@@ -1,0 +1,25 @@
+---
+import { GRADE_GROUPS, GRADE_COLORS } from '../data/helpers';
+
+interface Props {
+  distribution: Record<string, number>;
+  total: number;
+  compact?: boolean;
+}
+
+const { distribution, total, compact = false } = Astro.props;
+---
+
+<div class={`flex rounded-full overflow-hidden ${compact ? 'h-2' : 'h-3'}`} title={`${total} routes`}>
+  {GRADE_GROUPS.map(g => {
+    const count = distribution[g] || 0;
+    if (count === 0) return null;
+    const pct = (count / total) * 100;
+    return (
+      <div
+        style={`width: ${pct}%; background-color: ${GRADE_COLORS[g]}`}
+        title={`${g}: ${count}`}
+      />
+    );
+  })}
+</div>

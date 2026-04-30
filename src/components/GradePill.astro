@@ -1,0 +1,18 @@
+---
+import { GRADE_COLORS } from '../data/helpers';
+
+interface Props {
+  grade: string;
+  gradeGroup: string;
+}
+
+const { grade, gradeGroup } = Astro.props;
+const color = GRADE_COLORS[gradeGroup] || GRADE_COLORS['Unknown'];
+---
+
+<span
+  class="grade-pill"
+  style={`background-color: ${color}`}
+>
+  {grade || '?'}
+</span>

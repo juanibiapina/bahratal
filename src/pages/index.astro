@@ -1,0 +1,611 @@
+---
+import fs from 'node:fs';
+import path from 'node:path';
+import Layout from '../layouts/Layout.astro';
+import { data, GRADE_GROUPS, GRADE_COLORS, SECTOR_COLORS, slugify, getGradeDistribution } from '../data/helpers';
+
+const totalRoutes = data.sectors.reduce((s, sec) => s + sec.route_count, 0);
+const totalBlocks = data.sectors.reduce((s, sec) => s + sec.block_count, 0);
+
+// Build set of full-res image filenames available in public/files/
+const fullResFiles = new Set(
+  fs.readdirSync(path.join(process.cwd(), 'public', 'files'))
+);
+
+// Resolve a thumbnail path to { thumb, fullres }; fullres falls back to thumb if no full-res exists
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+function resolveImage(imgPath: string): { thumb: string; fullres: string } {
+  const thumb = `${BASE}/${imgPath}`;
+  const fullresName = imgPath.split('/').pop()!.replace('_klein', '');
+  const fullres = fullResFiles.has(fullresName) ? `${BASE}/files/${fullresName}` : thumb;
+  return { thumb, fullres };
+}
+
+const gradeGroupCounts: Record<string, number> = {};
+for (const sector of data.sectors) {
+  for (const block of sector.blocks) {
+    for (const route of block.routes) {
+      const g = route.grade_group || 'Unknown';
+      gradeGroupCounts[g] = (gradeGroupCounts[g] || 0) + 1;
+    }
+  }
+}
+
+// Serialize data for client-side (map + filtering)
+const clientData = JSON.stringify({
+  sectors: data.sectors.map(s => ({
+    name: s.name,
+    slug: slugify(s.name),
+    number: s.number,
+    parking_gps: s.parking_gps,
+    description: s.description,
+    block_count: s.block_count,
+    route_count: s.route_count,
+    color: SECTOR_COLORS[s.name] || '#78716c',
+    blocks: s.blocks.map(b => ({
+      name: b.name,
+      lat: b.lat,
+      lng: b.lng,
+      gps_url: b.gps_url,
+      images: b.images,
+      route_count: b.route_count,
+      routes: b.routes.map(r => ({
+        number: r.number,
+        name: r.name,
+        grade: r.grade,
+        grade_group: r.grade_group,
+        grade_sort: r.grade_sort,
+        description: r.description,
+        first_ascent: r.first_ascent,
+      })),
+    })),
+  })),
+});
+---
+
+<Layout title="Bahratal Bouldering Guide">
+  <!-- ── Nav ── -->
+  <nav class="sticky top-0 z-50 bg-stone-900/95 backdrop-blur border-b border-stone-800">
+    <div class="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+      <a href={import.meta.env.BASE_URL} class="font-bold text-lg tracking-tight text-amber-400 hover:text-amber-300 transition-colors">
+        🪨 Bahratal
+      </a>
+      <div class="flex bg-stone-800 rounded-lg p-0.5">
+        <button data-view="list" class="view-btn active-view px-3 py-1 text-xs font-medium rounded-md transition-colors">List</button>
+        <button data-view="map" class="view-btn px-3 py-1 text-xs font-medium rounded-md text-stone-400 transition-colors">Map</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-3xl mx-auto px-4 py-6 w-full flex-1">
+    <!-- ── Area info ── -->
+    <div class="mb-6">
+      <p class="text-stone-400 text-sm leading-relaxed">{data.area.description}</p>
+
+      <div class="flex gap-3 mt-4">
+        <div class="bg-stone-900 border border-stone-800 rounded-xl px-4 py-2 text-center">
+          <div class="text-xl font-bold text-amber-400">{data.sectors.length}</div>
+          <div class="text-stone-500 text-xs">sectors</div>
+        </div>
+        <div class="bg-stone-900 border border-stone-800 rounded-xl px-4 py-2 text-center">
+          <div class="text-xl font-bold text-amber-400">{totalBlocks}</div>
+          <div class="text-stone-500 text-xs">blocks</div>
+        </div>
+        <div class="bg-stone-900 border border-stone-800 rounded-xl px-4 py-2 text-center">
+          <div class="text-xl font-bold text-amber-400">{totalRoutes}</div>
+          <div class="text-stone-500 text-xs">routes</div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mt-4">
+        <a href={data.area.main_parking} target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600/15 text-sky-400 rounded-lg text-sm hover:bg-sky-600/25 transition-colors border border-sky-600/20">
+          🅿️ Main Parking
+        </a>
+        <a href={data.area.accommodation.website} target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/15 text-violet-400 rounded-lg text-sm hover:bg-violet-600/25 transition-colors border border-violet-600/20">
+          🏠 {data.area.accommodation.name}
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Sticky grade filter ── -->
+    <div class="sticky top-14 z-40 bg-stone-950/95 backdrop-blur -mx-4 px-4 py-3 border-b border-stone-800 mb-5">
+      <div class="flex flex-wrap gap-1.5" id="grade-filter">
+        <button data-grade="all" class="grade-btn active-grade px-2.5 py-1 rounded-lg text-xs font-medium transition-colors">
+          All <span class="text-stone-400">{totalRoutes}</span>
+        </button>
+        {GRADE_GROUPS.map(g => {
+          const count = gradeGroupCounts[g] || 0;
+          if (count === 0) return null;
+          return (
+            <button data-grade={g} class="grade-btn px-2.5 py-1 rounded-lg text-xs font-medium transition-colors text-stone-400 bg-stone-800 border border-stone-700">
+              <span class="inline-block w-2 h-2 rounded-full mr-0.5 align-middle" style={`background-color: ${GRADE_COLORS[g]}`}></span>
+              {g} <span class="text-stone-500">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search routes, blocks, sectors…"
+        class="mt-2 w-full bg-stone-800 border border-stone-700 rounded-lg px-3 py-1.5 text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20"
+      />
+    </div>
+
+    <!-- ── List view ── -->
+    <div id="list-view" class="space-y-4">
+      {data.sectors.map((sector, si) => {
+        return (
+          <div class="sector-card bg-stone-900 border border-stone-800 rounded-xl overflow-hidden" data-sector-idx={si}>
+
+            {/* Sector header */}
+            <button class="sector-toggle w-full text-left p-4 hover:bg-stone-800/40 transition-colors" data-sector-idx={si}>
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" style={`background-color: ${SECTOR_COLORS[sector.name]}`}></span>
+                    <h2 class="font-semibold text-stone-100">{sector.name}</h2>
+                    <span class="sector-counts text-xs text-stone-500">{sector.route_count} routes · {sector.block_count} blocks</span>
+                  </div>
+                  {sector.description && <p class="text-xs text-stone-500 mt-1">{sector.description}</p>}
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  {sector.parking_gps && (
+                    <a href={sector.parking_gps} target="_blank" class="text-sky-400 text-xs hover:underline" onclick="event.stopPropagation()">🅿️</a>
+                  )}
+                  <svg class="sector-chevron w-4 h-4 text-stone-500 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+              {/* Grade bar */}
+              <div class="mt-2.5 flex rounded-full overflow-hidden h-1.5 bg-stone-800">
+                {GRADE_GROUPS.map(g => {
+                  const count = sector.grade_distribution[g] || 0;
+                  if (count === 0) return null;
+                  const pct = (count / sector.route_count) * 100;
+                  return <div style={`width:${pct}%;background-color:${GRADE_COLORS[g]}`} />;
+                })}
+              </div>
+            </button>
+
+            {/* Sector body — blocks (collapsed by default) */}
+            <div class="sector-body hidden border-t border-stone-800" data-sector-idx={si}>
+              {sector.blocks.map((block, bi) => {
+                const blockDist = getGradeDistribution(block.routes);
+                return (
+                  <div class="block-card border-b border-stone-800/50 last:border-b-0" data-sector-idx={si} data-block-idx={bi}>
+
+                    {/* Block header */}
+                    <button class="block-toggle w-full text-left px-4 py-3 hover:bg-stone-800/30 transition-colors" data-sector-idx={si} data-block-idx={bi}>
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="block-name text-sm font-medium text-stone-200">{block.name}</span>
+                            <span class="block-counts text-xs text-stone-500">{block.route_count}</span>
+                          </div>
+                          <div class="mt-1 flex rounded-full overflow-hidden h-1 bg-stone-800">
+                            {GRADE_GROUPS.map(g => {
+                              const count = blockDist[g] || 0;
+                              if (count === 0) return null;
+                              const pct = (count / block.route_count) * 100;
+                              return <div style={`width:${pct}%;background-color:${GRADE_COLORS[g]}`} />;
+                            })}
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                          {block.gps_url && (
+                            <a href={block.gps_url} target="_blank" class="text-sky-400 text-[11px] hover:underline" onclick="event.stopPropagation()">📍</a>
+                          )}
+                          <svg class="block-chevron w-3.5 h-3.5 text-stone-600 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Block body — images + routes (collapsed, images deferred) */}
+                    <div
+                      class="block-body hidden px-4 pb-4"
+                      data-sector-idx={si}
+                      data-block-idx={bi}
+                      data-images={JSON.stringify(block.images.map(resolveImage))}
+                    >
+                      {/* Image container — populated by JS on expand */}
+                      {block.images.length > 0 && (
+                        <div class="block-images flex gap-2 overflow-x-auto pb-2 mb-3 snap-x"></div>
+                      )}
+                      {/* Routes */}
+                      <div class="space-y-0">
+                        {block.routes.map(route => (
+                          <div
+                            class="route-row flex items-center gap-2 py-1.5 border-b border-stone-800/30 last:border-b-0"
+                            data-grade-group={route.grade_group}
+                            data-search={`${route.name} ${block.name} ${sector.name}`.toLowerCase()}
+                          >
+                            <span class="text-stone-600 text-[11px] font-mono w-5 text-right shrink-0">{route.number}</span>
+                            <span
+                              class="grade-pill shrink-0"
+                              style={`background-color: ${GRADE_COLORS[route.grade_group] || GRADE_COLORS['Unknown']}`}
+                            >{route.grade || '?'}</span>
+                            <div class="flex-1 min-w-0">
+                              <div class="text-sm text-stone-200 truncate">{route.name || '—'}</div>
+                              {(route.description || route.first_ascent) && (
+                                <div class="text-[11px] text-stone-500 truncate">
+                                  {route.description}{route.description && route.first_ascent ? ' · ' : ''}{route.first_ascent}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      <div id="no-results" class="hidden text-center py-16 text-stone-500">
+        No routes match your filter.
+      </div>
+    </div>
+
+    <!-- ── Map view (hidden) ── -->
+    <div id="map-view" class="hidden">
+      <div class="flex items-center justify-end mb-3">
+        <button id="locate-btn" class="text-xs bg-emerald-600/15 text-emerald-400 px-3 py-1.5 rounded-lg hover:bg-emerald-600/25 transition-colors border border-emerald-600/20">
+          📍 Find me
+        </button>
+      </div>
+      <div id="map" class="w-full rounded-xl border border-stone-800 overflow-hidden" style="height: calc(100vh - 220px); min-height: 400px;"></div>
+      <div id="distance-list" class="hidden mt-4">
+        <h3 class="text-sm font-semibold text-stone-400 uppercase tracking-wider mb-2">Nearest blocks</h3>
+        <div id="distance-items" class="space-y-1.5"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Client data (for map + filtering logic) -->
+  <script id="app-data" type="application/json" set:html={clientData}></script>
+</Layout>
+
+<script>
+  // ── State ──
+  let activeGrade = 'all';
+  let searchTerm = '';
+  let currentView = 'list';
+  const openSectors = new Set<number>();
+  const openBlocks = new Set<string>();
+  const loadedImageBlocks = new Set<string>();
+  let leafletMap: any = null;
+  const mapMarkers: any[] = [];
+
+  const appData = JSON.parse(document.getElementById('app-data')!.textContent!);
+
+  const GRADE_COLORS: Record<string, string> = {
+    '4-5': '#22c55e', '6a': '#84cc16', '6b': '#eab308', '6c': '#f97316',
+    '7a': '#ef4444', '7b': '#dc2626', '7c': '#9333ea', '8a': '#6d28d9',
+    '8b+': '#1e1b4b', Unknown: '#78716c',
+  };
+
+  // ── Grade filter ──
+  document.querySelectorAll<HTMLButtonElement>('.grade-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeGrade = btn.dataset.grade || 'all';
+      document.querySelectorAll('.grade-btn').forEach(b => {
+        b.classList.toggle('active-grade', (b as HTMLElement).dataset.grade === activeGrade);
+        b.classList.toggle('text-stone-400', (b as HTMLElement).dataset.grade !== activeGrade);
+        b.classList.toggle('bg-stone-800', (b as HTMLElement).dataset.grade !== activeGrade);
+        b.classList.toggle('border-stone-700', (b as HTMLElement).dataset.grade !== activeGrade);
+      });
+      applyFilter();
+    });
+  });
+
+  // ── Search ──
+  const searchInput = document.getElementById('search-input') as HTMLInputElement;
+  searchInput.addEventListener('input', () => {
+    searchTerm = searchInput.value.toLowerCase().trim();
+    applyFilter();
+  });
+
+  // ── View toggle ──
+  document.querySelectorAll<HTMLButtonElement>('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentView = btn.dataset.view || 'list';
+      document.querySelectorAll('.view-btn').forEach(b => {
+        b.classList.toggle('active-view', (b as HTMLElement).dataset.view === currentView);
+        b.classList.toggle('text-stone-400', (b as HTMLElement).dataset.view !== currentView);
+      });
+      document.getElementById('list-view')!.classList.toggle('hidden', currentView !== 'list');
+      document.getElementById('map-view')!.classList.toggle('hidden', currentView !== 'map');
+      if (currentView === 'map') {
+        if (!leafletMap) initMap(); else applyMapFilter();
+      }
+    });
+  });
+
+  // ── Scroll helper: align a header just below the sticky bars ──
+  function scrollHeaderIntoView(el: HTMLElement) {
+    const nav = document.querySelector<HTMLElement>('nav');
+    const filter = document.querySelector<HTMLElement>('.sticky.top-14');
+    const offset = (nav?.offsetHeight || 0) + (filter?.offsetHeight || 0) + 8;
+    requestAnimationFrame(() => {
+      const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: 'smooth' });
+    });
+  }
+
+  // ── Sector expand/collapse ──
+  document.querySelectorAll<HTMLButtonElement>('.sector-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const si = parseInt(btn.dataset.sectorIdx!);
+      const wasOpen = openSectors.has(si);
+      wasOpen ? openSectors.delete(si) : openSectors.add(si);
+      const body = document.querySelector<HTMLElement>(`.sector-body[data-sector-idx="${si}"]`);
+      const chevron = btn.querySelector('.sector-chevron');
+      body?.classList.toggle('hidden', wasOpen);
+      chevron?.classList.toggle('rotate-180', !wasOpen);
+      if (!wasOpen) scrollHeaderIntoView(btn);
+    });
+  });
+
+  // ── Block expand/collapse + deferred image loading ──
+  document.querySelectorAll<HTMLButtonElement>('.block-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const si = btn.dataset.sectorIdx!;
+      const bi = btn.dataset.blockIdx!;
+      const key = `${si}-${bi}`;
+      openBlocks.has(key) ? openBlocks.delete(key) : openBlocks.add(key);
+
+      const body = document.querySelector<HTMLElement>(`.block-body[data-sector-idx="${si}"][data-block-idx="${bi}"]`);
+      const chevron = btn.querySelector('.block-chevron');
+      const isOpen = openBlocks.has(key);
+      body?.classList.toggle('hidden', !isOpen);
+      chevron?.classList.toggle('rotate-180', isOpen);
+      if (isOpen) scrollHeaderIntoView(btn);
+
+      // Load images on first expand
+      if (isOpen && body && !loadedImageBlocks.has(key)) {
+        loadedImageBlocks.add(key);
+        const imagesJson = body.dataset.images;
+        if (imagesJson) {
+          const images: { thumb: string; fullres: string }[] = JSON.parse(imagesJson);
+          const container = body.querySelector('.block-images');
+          if (container && images.length > 0) {
+            container.innerHTML = images.map(img =>
+              `<a href="${img.fullres}" target="_blank" class="shrink-0 snap-start">
+                <img src="${img.thumb}" alt="topo" class="h-28 sm:h-40 rounded-lg border border-stone-700 object-cover" loading="lazy" />
+              </a>`
+            ).join('');
+          }
+        }
+      }
+    });
+  });
+
+  // ── Filter logic ──
+  function applyFilter() {
+    const isFiltered = activeGrade !== 'all' || searchTerm !== '';
+    const sectorCards = document.querySelectorAll<HTMLElement>('.sector-card');
+
+    sectorCards.forEach((card, si) => {
+      const sector = appData.sectors[si];
+      let sectorMatch = 0;
+
+      const blockCards = card.querySelectorAll<HTMLElement>('.block-card');
+      blockCards.forEach((blockCard, bi) => {
+        const block = sector.blocks[bi];
+        let blockMatch = 0;
+
+        blockCard.querySelectorAll<HTMLElement>('.route-row').forEach(row => {
+          const gg = row.dataset.gradeGroup;
+          const search = row.dataset.search || '';
+          const match = (activeGrade === 'all' || gg === activeGrade)
+                     && (!searchTerm || search.includes(searchTerm));
+          row.style.opacity = isFiltered ? (match ? '1' : '0.15') : '1';
+          if (match) blockMatch++;
+        });
+
+        if (!isFiltered) blockMatch = block.route_count;
+        sectorMatch += blockMatch;
+
+        // Update block count label
+        const countEl = blockCard.querySelector('.block-counts');
+        if (countEl) {
+          countEl.textContent = isFiltered ? `${blockMatch} of ${block.route_count}` : String(block.route_count);
+        }
+        blockCard.style.opacity = isFiltered && blockMatch === 0 ? '0.3' : '1';
+      });
+
+      // Update sector count label
+      const sectorCounts = card.querySelector('.sector-counts');
+      if (sectorCounts) {
+        sectorCounts.textContent = isFiltered
+          ? `${sectorMatch} of ${sector.route_count} routes`
+          : `${sector.route_count} routes · ${sector.block_count} blocks`;
+      }
+
+      card.style.opacity = isFiltered && sectorMatch === 0 ? '0.3' : '1';
+      card.style.order = isFiltered ? String(1000 - sectorMatch) : '';
+    });
+
+    document.getElementById('no-results')!.classList.toggle(
+      'hidden',
+      !isFiltered || Array.from(sectorCards).some(c => c.style.opacity !== '0.3'),
+    );
+
+    if (currentView === 'map') applyMapFilter();
+  }
+
+  // ── Map ──
+  function initMap() {
+    const L = (window as any).L;
+    if (!L) {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      s.onload = () => initMap();
+      document.head.appendChild(s);
+      return;
+    }
+
+    leafletMap = L.map('map').setView([50.886, 13.978], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 19,
+    }).addTo(leafletMap);
+
+    appData.sectors.forEach((sector: any, si: number) => {
+      sector.blocks.forEach((block: any, bi: number) => {
+        if (!block.lat || !block.lng) return;
+        const gradeGroups = [...new Set(block.routes.map((r: any) => r.grade_group))] as string[];
+        const marker = L.marker([block.lat, block.lng], {
+          icon: L.divIcon({
+            html: `<div style="background:${sector.color};width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>`,
+            className: '', iconSize: [12, 12], iconAnchor: [6, 6],
+          }),
+        });
+        marker._appData = { sectorIdx: si, blockIdx: bi, sector: sector.name, block, gradeGroups, color: sector.color };
+
+        const grades = block.routes.map((r: any) => r.grade).filter(Boolean);
+        const range = grades.length > 1 ? `${grades[0]}–${grades[grades.length-1]}` : grades[0] || '?';
+        marker.bindPopup(`<div style="min-width:160px;font-size:13px;line-height:1.5">
+          <strong style="color:#1c1917">${block.name}</strong><br>
+          <span style="color:#666">${sector.name}</span><br>
+          <span style="color:#1c1917">${block.route_count} routes · ${range}</span>
+          <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">
+            <a href="#" onclick="window.openBlock(${si},${bi});return false" style="color:#b45309;font-weight:600">View routes →</a>
+            ${block.gps_url ? `<a href="${block.gps_url}" target="_blank" style="color:#0369a1">Open in Maps</a>` : ''}
+          </div>
+        </div>`);
+        marker.addTo(leafletMap);
+        mapMarkers.push(marker);
+      });
+    });
+
+    document.getElementById('locate-btn')?.addEventListener('click', () => {
+      navigator.geolocation?.getCurrentPosition(pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        const L = (window as any).L;
+        L.marker([lat, lng], {
+          icon: L.divIcon({
+            html: '<div style="background:#3b82f6;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(59,130,246,.5)"></div>',
+            className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+          }),
+        }).addTo(leafletMap).bindPopup('You are here');
+        leafletMap.setView([lat, lng], 15);
+
+        const withDist = mapMarkers
+          .filter(m => activeGrade === 'all' || m._appData.gradeGroups.includes(activeGrade))
+          .map(m => ({ ...m._appData, dist: leafletMap.distance([lat, lng], [m._appData.block.lat, m._appData.block.lng]) }))
+          .sort((a: any, b: any) => a.dist - b.dist);
+
+        const items = document.getElementById('distance-items')!;
+        document.getElementById('distance-list')!.classList.remove('hidden');
+        items.innerHTML = withDist.slice(0, 10).map((b: any) => `
+          <button type="button" onclick="window.openBlock(${b.sectorIdx},${b.blockIdx})" class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg bg-stone-900 border border-stone-800 hover:bg-stone-800 hover:border-stone-700 transition-colors">
+            <span class="w-3 h-3 rounded-full shrink-0" style="background:${b.color}"></span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm text-stone-200">${b.block.name}</div>
+              <div class="text-[11px] text-stone-500">${b.sector} · ${b.block.route_count} routes</div>
+            </div>
+            <span class="text-xs text-stone-500 tabular-nums">${b.dist < 1000 ? Math.round(b.dist) + 'm' : (b.dist/1000).toFixed(1) + 'km'}</span>
+            <svg class="w-3.5 h-3.5 text-stone-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+          </button>
+        `).join('');
+      }, err => alert('Location error: ' + err.message));
+    });
+
+    applyMapFilter();
+  }
+
+  // ── Open a specific block in list view (called from map popup + nearest-blocks list) ──
+  (window as any).openBlock = (si: number, bi: number) => {
+    // Switch to list view
+    if (currentView !== 'list') {
+      const listBtn = document.querySelector<HTMLButtonElement>('.view-btn[data-view="list"]');
+      listBtn?.click();
+    }
+    // Expand sector if needed
+    if (!openSectors.has(si)) {
+      openSectors.add(si);
+      const body = document.querySelector<HTMLElement>(`.sector-body[data-sector-idx="${si}"]`);
+      const sectorBtn = document.querySelector<HTMLElement>(`.sector-toggle[data-sector-idx="${si}"]`);
+      body?.classList.remove('hidden');
+      sectorBtn?.querySelector('.sector-chevron')?.classList.add('rotate-180');
+    }
+    // Expand block if needed
+    const key = `${si}-${bi}`;
+    if (!openBlocks.has(key)) {
+      openBlocks.add(key);
+      const blockBody = document.querySelector<HTMLElement>(`.block-body[data-sector-idx="${si}"][data-block-idx="${bi}"]`);
+      const blockBtn = document.querySelector<HTMLElement>(`.block-toggle[data-sector-idx="${si}"][data-block-idx="${bi}"]`);
+      blockBody?.classList.remove('hidden');
+      blockBtn?.querySelector('.block-chevron')?.classList.add('rotate-180');
+      // Lazy-load images
+      if (blockBody && !loadedImageBlocks.has(key)) {
+        loadedImageBlocks.add(key);
+        const imagesJson = blockBody.dataset.images;
+        if (imagesJson) {
+          const images: { thumb: string; fullres: string }[] = JSON.parse(imagesJson);
+          const container = blockBody.querySelector('.block-images');
+          if (container && images.length > 0) {
+            container.innerHTML = images.map(img =>
+              `<a href="${img.fullres}" target="_blank" class="shrink-0 snap-start">
+                <img src="${img.thumb}" alt="topo" class="h-28 sm:h-40 rounded-lg border border-stone-700 object-cover" loading="lazy" />
+              </a>`
+            ).join('');
+          }
+        }
+      }
+    }
+    // Scroll to the block
+    const blockBtn = document.querySelector<HTMLElement>(`.block-toggle[data-sector-idx="${si}"][data-block-idx="${bi}"]`);
+    if (blockBtn) scrollHeaderIntoView(blockBtn);
+  };
+
+  function applyMapFilter() {
+    if (!leafletMap) return;
+    const L = (window as any).L;
+    const isFiltered = activeGrade !== 'all' || searchTerm !== '';
+
+    mapMarkers.forEach(m => {
+      const d = m._appData;
+      const matchCount = d.block.routes.filter((r: any) => {
+        const gm = activeGrade === 'all' || r.grade_group === activeGrade;
+        const sm = !searchTerm || `${r.name} ${d.block.name} ${d.sector}`.toLowerCase().includes(searchTerm);
+        return gm && sm;
+      }).length;
+
+      if (!isFiltered || matchCount > 0) {
+        m.addTo(leafletMap);
+        const size = isFiltered ? Math.max(10, Math.min(20, 8 + matchCount * 2)) : 12;
+        m.setIcon(L.divIcon({
+          html: `<div style="background:${d.color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:8px;color:white;font-weight:bold">${isFiltered ? matchCount : ''}</div>`,
+          className: '', iconSize: [size, size], iconAnchor: [size/2, size/2],
+        }));
+      } else {
+        leafletMap.removeLayer(m);
+      }
+    });
+  }
+</script>
+
+<style>
+  .active-grade {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+  .active-view {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+  }
+  #list-view {
+    display: flex;
+    flex-direction: column;
+  }
+  #list-view.hidden { display: none; }
+</style>
