@@ -290,6 +290,15 @@ const clientData = JSON.stringify({
 
   const appData = JSON.parse(document.getElementById('app-data')!.textContent!);
 
+  // ── Service worker (offline support) ──
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker
+        .register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL })
+        .catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+
   const GRADE_COLORS: Record<string, string> = {
     '4-5': '#22c55e', '6': '#eab308', '7': '#ef4444', '8': '#7c3aed',
     Unknown: '#78716c',
@@ -458,15 +467,17 @@ const clientData = JSON.stringify({
     const L = (window as any).L;
     if (!L) {
       const s = document.createElement('script');
-      s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      s.src = `${import.meta.env.BASE_URL}vendor/leaflet/leaflet.js`;
       s.onload = () => initMap();
       document.head.appendChild(s);
       return;
     }
 
     leafletMap = L.map('map').setView([50.886, 13.978], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19,
+    // Local pre-cached tiles (z13–17) with OSM as fallback when online + zoomed past local set.
+    L.tileLayer(`${import.meta.env.BASE_URL}tiles/{z}/{x}/{y}.png`, {
+      attribution: '© OpenStreetMap', maxZoom: 17, minZoom: 13,
+      errorTileUrl: `${import.meta.env.BASE_URL}tiles/blank.png`,
     }).addTo(leafletMap);
 
     appData.sectors.forEach((sector: any, si: number) => {

@@ -14,6 +14,8 @@ The original site spreads route info across ~200 pages with no way to filter by 
 - **Locate me** — list of nearest blocks based on your GPS
 - **Search** — across route, block, and sector names
 - **Topo images** — full-res versions linked from thumbnails, lazy-loaded
+- **Works offline** — service worker pre-caches the app shell + map tiles on first visit; topos are cached as you open them. Once visited online, the whole guide is usable at the crag with no signal.
+- **Installable** — PWA manifest + apple-touch-icon, so it can be added to the home screen and launched fullscreen.
 
 ## Stats
 
@@ -26,7 +28,10 @@ The original site spreads route info across ~200 pages with no way to filter by 
 
 - [Astro](https://astro.build/) (static site, zero JS by default)
 - [Tailwind CSS v4](https://tailwindcss.com/) (via Vite plugin)
-- [Leaflet](https://leafletjs.com/) (map view)
+- [Leaflet](https://leafletjs.com/) (self-hosted; map view)
+- Pre-rendered OpenStreetMap raster tiles bundled at zoom 13–17 (~2.5 MB, 398 tiles)
+- Service worker (hand-rolled, no Workbox) for offline support
+- Web App Manifest for install-to-home-screen
 - Vanilla JS for filter/expand logic — no framework
 
 ## Run locally
@@ -54,6 +59,14 @@ src/
 public/
   images/             # 307 thumbnails (~_klein.jpg)
   files/              # 301 full-res topo images
+  tiles/              # 398 pre-rendered OSM tiles (z13–17)
+  tiles-manifest.json # list of tile paths for the service worker to pre-cache
+  vendor/leaflet/     # self-hosted Leaflet (no CDN dependency)
+  icons/              # PWA icons (180/192/512)
+  manifest.webmanifest
+  sw.js               # service worker (offline support)
+scripts/
+  fetch-tiles.py      # one-shot OSM tile pre-fetcher (rate-limited, polite UA)
 PRD.md                # product requirements
 DESIGN.md             # UX redesign rationale
 ```

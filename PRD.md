@@ -62,6 +62,14 @@ Source: `src/data/bahratal.json`
 - Full-text search across route names, block names, sector names.
 - Results link to the matching block/route.
 
+### 7. Offline support
+
+- Service worker pre-caches the app shell (HTML, JS, CSS, self-hosted Leaflet, icons) on install.
+- Map raster tiles for the bouldering area (z13–17, ~400 tiles, ~2.5 MB) are bundled in `public/tiles/` and pre-cached in the background after activation.
+- Topo images are cached on first view (cache-first runtime strategy), so once a block has been opened online it stays available offline.
+- Navigation requests are network-first with cache fallback so updates show immediately when online but the page still loads with no signal.
+- PWA manifest enables “Add to Home Screen” on iOS and Android, launching standalone with the dark theme color.
+
 ## Non-goals
 
 - User accounts, tick lists, or any server-side state.
@@ -88,3 +96,7 @@ Source: `src/data/bahratal.json`
 10. ✅ Build map view with Leaflet.
 11. ✅ Build search.
 12. ✅ Test on mobile viewport.
+13. ✅ Self-host Leaflet (drop unpkg dependency).
+14. ✅ Pre-fetch and bundle OSM tiles for the area at zoom 13–17.
+15. ✅ Add a service worker that pre-caches the app shell + tiles and runtime-caches images.
+16. ✅ Add PWA manifest, theme color, and apple-touch-icon for install-to-home-screen.
