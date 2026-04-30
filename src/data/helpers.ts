@@ -56,8 +56,13 @@ export interface AreaData {
 
 export const data: AreaData = rawData as AreaData;
 
+/** Color/bar families. */
 export const GRADE_GROUPS = ['4-5', '6', '7', '8'] as const;
 export type GradeGroup = (typeof GRADE_GROUPS)[number];
+
+/** Granular groups used by the filter chips. */
+export const FILTER_GROUPS = ['4-5', '6a', '6b', '6c', '7a', '7b', '7c', '8a', '8b+'] as const;
+export type FilterGroup = (typeof FILTER_GROUPS)[number];
 
 export const GRADE_COLORS: Record<string, string> = {
   '4-5': '#22c55e',

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Layout from '../layouts/Layout.astro';
-import { data, GRADE_GROUPS, GRADE_COLORS, SECTOR_COLORS, slugify, getGradeDistribution, gradeFamily } from '../data/helpers';
+import { data, GRADE_GROUPS, FILTER_GROUPS, GRADE_COLORS, SECTOR_COLORS, slugify, getGradeDistribution, gradeFamily } from '../data/helpers';
 
 const totalRoutes = data.sectors.reduce((s, sec) => s + sec.route_count, 0);
 const totalBlocks = data.sectors.reduce((s, sec) => s + sec.block_count, 0);
@@ -25,7 +25,7 @@ const gradeGroupCounts: Record<string, number> = {};
 for (const sector of data.sectors) {
   for (const block of sector.blocks) {
     for (const route of block.routes) {
-      const g = gradeFamily(route.grade_group);
+      const g = route.grade_group || 'Unknown';
       gradeGroupCounts[g] = (gradeGroupCounts[g] || 0) + 1;
     }
   }
@@ -113,12 +113,12 @@ const clientData = JSON.stringify({
         <button data-grade="all" class="grade-btn active-grade px-2.5 py-1 rounded-lg text-xs font-medium transition-colors">
           All <span class="text-stone-400">{totalRoutes}</span>
         </button>
-        {GRADE_GROUPS.map(g => {
+        {FILTER_GROUPS.map(g => {
           const count = gradeGroupCounts[g] || 0;
           if (count === 0) return null;
           return (
             <button data-grade={g} class="grade-btn px-2.5 py-1 rounded-lg text-xs font-medium transition-colors text-stone-400 bg-stone-800 border border-stone-700">
-              <span class="inline-block w-2 h-2 rounded-full mr-0.5 align-middle" style={`background-color: ${GRADE_COLORS[g]}`}></span>
+              <span class="inline-block w-2 h-2 rounded-full mr-0.5 align-middle" style={`background-color: ${GRADE_COLORS[gradeFamily(g)]}`}></span>
               {g} <span class="text-stone-500">{count}</span>
             </button>
           );
@@ -225,7 +225,7 @@ const clientData = JSON.stringify({
                         {block.routes.map(route => (
                           <div
                             class="route-row flex items-center gap-2 py-1.5 border-b border-stone-800/30 last:border-b-0"
-                            data-grade-group={gradeFamily(route.grade_group)}
+                            data-grade-group={route.grade_group}
                             data-search={`${route.name} ${block.name} ${sector.name}`.toLowerCase()}
                           >
                             <span class="text-stone-600 text-[11px] font-mono w-5 text-right shrink-0">{route.number}</span>
@@ -472,7 +472,7 @@ const clientData = JSON.stringify({
     appData.sectors.forEach((sector: any, si: number) => {
       sector.blocks.forEach((block: any, bi: number) => {
         if (!block.lat || !block.lng) return;
-        const gradeGroups = [...new Set(block.routes.map((r: any) => gradeFamily(r.grade_group)))] as string[];
+        const gradeGroups = [...new Set(block.routes.map((r: any) => r.grade_group))] as string[];
         const marker = L.marker([block.lat, block.lng], {
           icon: L.divIcon({
             html: `<div style="background:${sector.color};width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>`,
@@ -586,7 +586,7 @@ const clientData = JSON.stringify({
     mapMarkers.forEach(m => {
       const d = m._appData;
       const matchCount = d.block.routes.filter((r: any) => {
-        const gm = activeGrade === 'all' || gradeFamily(r.grade_group) === activeGrade;
+        const gm = activeGrade === 'all' || r.grade_group === activeGrade;
         const sm = !searchTerm || `${r.name} ${d.block.name} ${d.sector}`.toLowerCase().includes(searchTerm);
         return gm && sm;
       }).length;
