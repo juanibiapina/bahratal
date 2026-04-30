@@ -85,12 +85,70 @@ const clientData = JSON.stringify({
       <a href={import.meta.env.BASE_URL} class="font-bold text-lg tracking-tight text-amber-400 hover:text-amber-300 transition-colors">
         🪨 Bahratal
       </a>
-      <div class="flex bg-stone-800 rounded-lg p-0.5">
-        <button data-view="list" class="view-btn active-view px-3 py-1 text-xs font-medium rounded-md transition-colors">List</button>
-        <button data-view="map" class="view-btn px-3 py-1 text-xs font-medium rounded-md text-stone-400 transition-colors">Map</button>
+      <div class="flex items-center gap-2">
+        <!-- Offline pack status — idle / downloading (with progress ring) / done -->
+        <button id="offline-trigger" type="button" aria-label="Offline pack" title="Offline pack"
+          class="relative w-9 h-9 flex items-center justify-center rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors">
+          <!-- Idle: cloud + down arrow -->
+          <svg id="offline-icon-idle" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.9 5 5 0 019.78-1.45A4.5 4.5 0 0117 17H7zM12 11v6m0 0l-3-3m3 3l3-3"/>
+          </svg>
+          <!-- Downloading: amber progress ring + % -->
+          <svg id="offline-icon-loading" class="hidden absolute w-9 h-9 -rotate-90" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(245,158,11,0.2)" stroke-width="3"/>
+            <circle id="offline-ring" cx="18" cy="18" r="14" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+          </svg>
+          <span id="offline-icon-percent" class="hidden absolute text-[9px] font-mono font-semibold text-amber-400 tabular-nums">0%</span>
+          <!-- Done: green check -->
+          <svg id="offline-icon-done" class="hidden w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+        </button>
+
+        <div class="flex bg-stone-800 rounded-lg p-0.5">
+          <button data-view="list" class="view-btn active-view px-3 py-1 text-xs font-medium rounded-md transition-colors">List</button>
+          <button data-view="map" class="view-btn px-3 py-1 text-xs font-medium rounded-md text-stone-400 transition-colors">Map</button>
+        </div>
       </div>
     </div>
   </nav>
+
+  <!-- ── Offline pack dialog ── -->
+  <dialog id="offline-dialog" class="offline-dialog bg-stone-900 text-stone-200 rounded-2xl border border-stone-800 p-0 w-[90vw] max-w-sm">
+    <div class="p-5">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 class="font-semibold text-stone-100">Offline pack</h2>
+          <p class="text-xs text-stone-500 mt-0.5 leading-relaxed">Cache every topo for use without signal at the crag.</p>
+        </div>
+        <button id="offline-close" type="button" aria-label="Close"
+          class="shrink-0 -mt-1 -mr-1 w-8 h-8 flex items-center justify-center rounded-md text-stone-500 hover:text-stone-200 hover:bg-stone-800 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="bg-stone-800/40 border border-stone-800 rounded-xl p-3 space-y-2.5">
+        <div class="flex items-baseline justify-between gap-2">
+          <span id="offline-status" class="text-sm font-medium text-stone-200">Not downloaded</span>
+          <span id="offline-meta" class="text-[11px] text-stone-500 tabular-nums">—</span>
+        </div>
+        <div class="h-2 rounded-full bg-stone-800 overflow-hidden">
+          <div id="offline-bar" class="h-full bg-amber-500 transition-[width] duration-150" style="width: 0%"></div>
+        </div>
+        <div class="flex items-center justify-between gap-2">
+          <span id="offline-detail" class="text-[11px] text-stone-500 tabular-nums">—</span>
+          <button id="offline-action" type="button"
+            class="text-xs font-medium px-3 py-1.5 rounded-md border transition-colors">Download</button>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-stone-500 mt-3 leading-relaxed">
+        The map and route list already work offline after one online visit. This adds full-resolution topo images.
+      </p>
+    </div>
+  </dialog>
 
   <div class="max-w-3xl mx-auto px-4 py-6 w-full flex-1">
     <!-- ── Area info ── -->
@@ -121,26 +179,6 @@ const clientData = JSON.stringify({
         </a>
       </div>
 
-      <!-- ── Offline download ── -->
-      <div id="offline-card" class="mt-4 border border-stone-800 rounded-xl bg-stone-900/60 overflow-hidden">
-        <button id="offline-action" type="button" class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-stone-800/40 transition-colors">
-          <span id="offline-icon" class="text-lg shrink-0">📥</span>
-          <div class="flex-1 min-w-0">
-            <div id="offline-label" class="text-sm text-stone-200 font-medium">Download all topos for offline</div>
-            <div id="offline-sub" class="text-[11px] text-stone-500">~{offlineTotalMB} MB · {offlineAssets.length} images</div>
-          </div>
-          <span id="offline-aux" class="text-[11px] text-stone-500 shrink-0"></span>
-        </button>
-        <div id="offline-progress" class="hidden px-3 pb-3 pt-1 space-y-1.5">
-          <div class="h-2 rounded-full bg-stone-800 overflow-hidden">
-            <div id="offline-bar" class="h-full bg-amber-500 transition-[width] duration-150" style="width: 0%"></div>
-          </div>
-          <div class="flex items-center justify-between text-[11px]">
-            <span id="offline-progress-label" class="text-stone-400 tabular-nums">0.0 / {offlineTotalMB}.0 MB</span>
-            <button id="offline-cancel" type="button" class="text-rose-400 hover:text-rose-300">Cancel</button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- ── Sticky grade filter ── -->
@@ -337,9 +375,10 @@ const clientData = JSON.stringify({
     });
   }
 
-  // ── "Download for offline" button ──
+  // ── Offline pack (nav-icon trigger + dialog) ──
   // Pulls every thumbnail + full-res topo into a versionless cache that the SW also reads from.
-  // Resumable (skips URLs already cached), cancellable (AbortController), and clearable when full.
+  // Resumable (skips URLs already cached), cancellable (AbortController), clearable when full.
+  // Closing the dialog mid-download keeps the download running in the background; the nav icon updates either way.
   const OFFLINE_CACHE_NAME = 'bahratal-offline-assets';
   type OfflineAsset = { url: string; bytes: number };
   const offlineAssets: OfflineAsset[] = JSON.parse(
@@ -349,105 +388,153 @@ const clientData = JSON.stringify({
   const fmtMB = (n: number) => (n / 1024 / 1024).toFixed(1);
   const pathOf = (u: string) => new URL(u, location.origin).pathname;
 
+  type OfflineMode = 'idle' | 'partial' | 'downloading' | 'complete';
+
   const offEls = {
-    card:    document.getElementById('offline-card')!,
-    action:  document.getElementById('offline-action') as HTMLButtonElement,
-    icon:    document.getElementById('offline-icon')!,
-    label:   document.getElementById('offline-label')!,
-    sub:     document.getElementById('offline-sub')!,
-    aux:     document.getElementById('offline-aux')!,
-    progress: document.getElementById('offline-progress')!,
-    bar:     document.getElementById('offline-bar') as HTMLElement,
-    progLabel: document.getElementById('offline-progress-label')!,
-    cancel:  document.getElementById('offline-cancel') as HTMLButtonElement,
+    trigger:    document.getElementById('offline-trigger') as HTMLButtonElement,
+    iconIdle:   document.getElementById('offline-icon-idle')!,
+    iconLoad:   document.getElementById('offline-icon-loading')!,
+    iconRing:   document.getElementById('offline-ring') as unknown as SVGCircleElement,
+    iconPct:    document.getElementById('offline-icon-percent')!,
+    iconDone:   document.getElementById('offline-icon-done')!,
+    dialog:     document.getElementById('offline-dialog') as HTMLDialogElement,
+    close:      document.getElementById('offline-close') as HTMLButtonElement,
+    status:     document.getElementById('offline-status')!,
+    meta:       document.getElementById('offline-meta')!,
+    bar:        document.getElementById('offline-bar') as HTMLElement,
+    detail:     document.getElementById('offline-detail')!,
+    action:     document.getElementById('offline-action') as HTMLButtonElement,
   };
 
-  let offlineDownloading = false;
+  // Live state. Tracked outside the DOM so the nav icon stays in sync even when the dialog is closed.
+  let offlineMode: OfflineMode = 'idle';
+  let offlineCachedBytes = 0;
+  let offlineCachedCount = 0;
   let offlineAbort: AbortController | null = null;
 
-  async function offlineCachedSet(): Promise<Set<string>> {
-    if (!('caches' in window)) return new Set();
+  async function offlineRecount() {
+    if (!('caches' in window)) return;
     const cache = await caches.open(OFFLINE_CACHE_NAME);
     const keys = await cache.keys();
-    return new Set(keys.map(r => pathOf(r.url)));
-  }
-
-  async function offlineState() {
-    const cached = await offlineCachedSet();
+    const cached = new Set(keys.map(r => pathOf(r.url)));
     let bytes = 0, count = 0;
     for (const a of offlineAssets) {
       if (cached.has(pathOf(a.url))) { bytes += a.bytes; count++; }
     }
-    return { count, bytes, total: offlineAssets.length };
+    offlineCachedBytes = bytes;
+    offlineCachedCount = count;
+    if (offlineMode !== 'downloading') {
+      offlineMode = count === 0 ? 'idle'
+                   : count < offlineAssets.length ? 'partial'
+                   : 'complete';
+    }
+  }
+
+  function renderTrigger() {
+    const pct = Math.min(100, (offlineCachedBytes / offlineTotalBytes) * 100);
+    const showLoad = offlineMode === 'downloading';
+    const showDone = offlineMode === 'complete';
+    const showIdle = !showLoad && !showDone;
+    offEls.iconIdle.classList.toggle('hidden', !showIdle);
+    offEls.iconLoad.classList.toggle('hidden', !showLoad);
+    offEls.iconPct.classList.toggle('hidden', !showLoad);
+    offEls.iconDone.classList.toggle('hidden', !showDone);
+    if (showLoad) {
+      // Stroke the progress arc; pathLength=100 lets us use the percentage directly.
+      offEls.iconRing.style.strokeDashoffset = String(100 - pct);
+      offEls.iconPct.textContent = `${Math.round(pct)}%`;
+    }
+    // Subtle visual cue when partial: keep the down-arrow but tint amber.
+    offEls.trigger.classList.toggle('text-amber-400', offlineMode === 'partial');
+    offEls.trigger.title = ({
+      idle: 'Download topos for offline',
+      partial: `Resume offline download (${Math.round(pct)}% cached)`,
+      downloading: `Downloading… ${Math.round(pct)}%`,
+      complete: 'Available offline',
+    })[offlineMode];
+  }
+
+  function renderDialog() {
+    const pct = Math.min(100, (offlineCachedBytes / offlineTotalBytes) * 100);
+    const total = offlineAssets.length;
+    const totalMB = fmtMB(offlineTotalBytes);
+    offEls.bar.style.width = pct.toFixed(2) + '%';
+    offEls.detail.textContent = `${fmtMB(offlineCachedBytes)} / ${totalMB} MB`;
+    switch (offlineMode) {
+      case 'idle':
+        offEls.status.textContent = 'Not downloaded';
+        offEls.meta.textContent = `~${totalMB} MB · ${total} images`;
+        offEls.action.textContent = 'Download';
+        setActionStyle('primary');
+        break;
+      case 'partial':
+        offEls.status.textContent = 'Partially cached';
+        offEls.meta.textContent = `${offlineCachedCount} of ${total}`;
+        offEls.action.textContent = 'Resume';
+        setActionStyle('primary');
+        break;
+      case 'downloading':
+        offEls.status.textContent = 'Downloading…';
+        offEls.meta.textContent = `${offlineCachedCount} of ${total}`;
+        offEls.action.textContent = 'Cancel';
+        setActionStyle('danger');
+        break;
+      case 'complete':
+        offEls.status.textContent = 'Available offline';
+        offEls.meta.textContent = `${total} images cached`;
+        offEls.action.textContent = 'Clear';
+        setActionStyle('subtle');
+        break;
+    }
+  }
+
+  function setActionStyle(kind: 'primary' | 'danger' | 'subtle') {
+    const btn = offEls.action;
+    btn.className = 'text-xs font-medium px-3 py-1.5 rounded-md border transition-colors';
+    if (kind === 'primary') btn.classList.add('bg-amber-600/20', 'text-amber-300', 'border-amber-600/30', 'hover:bg-amber-600/30');
+    else if (kind === 'danger') btn.classList.add('bg-rose-600/15', 'text-rose-300', 'border-rose-600/25', 'hover:bg-rose-600/25');
+    else btn.classList.add('bg-stone-800', 'text-stone-400', 'border-stone-700', 'hover:bg-stone-700', 'hover:text-stone-200');
   }
 
   async function refreshOfflineUI() {
-    if (offlineDownloading) return;
     if (!('caches' in window)) {
-      offEls.card.classList.add('hidden');
+      offEls.trigger.classList.add('hidden');
       return;
     }
-    const { count, bytes, total } = await offlineState();
-    offEls.progress.classList.add('hidden');
-    if (count === 0) {
-      offEls.icon.textContent = '📥';
-      offEls.label.textContent = 'Download all topos for offline';
-      offEls.sub.textContent = `~${fmtMB(offlineTotalBytes)} MB · ${total} images`;
-      offEls.aux.textContent = '';
-    } else if (count < total) {
-      offEls.icon.textContent = '⏸';
-      offEls.label.textContent = 'Resume offline download';
-      offEls.sub.textContent = `${fmtMB(bytes)} / ${fmtMB(offlineTotalBytes)} MB · ${count} of ${total}`;
-      offEls.aux.textContent = '';
-    } else {
-      offEls.icon.textContent = '✅';
-      offEls.label.textContent = 'Available offline';
-      offEls.sub.textContent = `${fmtMB(bytes)} MB · ${total} images cached`;
-      offEls.aux.textContent = 'Clear';
-    }
+    if (offlineMode !== 'downloading') await offlineRecount();
+    renderTrigger();
+    renderDialog();
   }
 
   async function startOfflineDownload() {
-    if (offlineDownloading || !('caches' in window)) return;
-    offlineDownloading = true;
+    if (offlineMode === 'downloading' || !('caches' in window)) return;
+    offlineMode = 'downloading';
     offlineAbort = new AbortController();
 
     const cache = await caches.open(OFFLINE_CACHE_NAME);
-    const cached = await offlineCachedSet();
-    const todo = offlineAssets.filter(a => !cached.has(pathOf(a.url)));
-    let bytes = offlineAssets.reduce((s, a) => cached.has(pathOf(a.url)) ? s + a.bytes : s, 0);
+    const cachedKeys = new Set((await cache.keys()).map(r => pathOf(r.url)));
+    const todo = offlineAssets.filter(a => !cachedKeys.has(pathOf(a.url)));
 
-    offEls.icon.textContent = '⬇️';
-    offEls.label.textContent = 'Downloading…';
-    offEls.aux.textContent = '';
-    offEls.progress.classList.remove('hidden');
-
-    const updateBar = () => {
-      const pct = Math.min(100, (bytes / offlineTotalBytes) * 100);
-      offEls.bar.style.width = pct.toFixed(2) + '%';
-      offEls.progLabel.textContent = `${fmtMB(bytes)} / ${fmtMB(offlineTotalBytes)} MB`;
-      offEls.sub.textContent = `${Math.round(pct)} % · ${offlineAssets.length - todo.length + Math.min(todo.length, doneCount)} of ${offlineAssets.length}`;
-    };
+    renderTrigger(); renderDialog();
 
     const CONCURRENCY = 6;
     let i = 0;
     let aborted = false;
     let failed = 0;
-    let doneCount = 0;
-    updateBar();
 
     async function worker() {
       while (i < todo.length && !aborted) {
-        const idx = i++;
-        const asset = todo[idx];
+        const asset = todo[i++];
         try {
-          // cache: 'reload' tells the browser & SW to bypass any caches and hit the network.
+          // cache: 'reload' tells the SW handler to skip its own runtime cache, avoiding double storage.
           const res = await fetch(asset.url, { signal: offlineAbort!.signal, cache: 'reload' });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           await cache.put(asset.url, res.clone());
-          bytes += asset.bytes;
-          doneCount++;
-          updateBar();
+          offlineCachedBytes += asset.bytes;
+          offlineCachedCount += 1;
+          renderTrigger();
+          // Only re-render the dialog while it's open (avoids work that's never seen).
+          if (offEls.dialog.open) renderDialog();
         } catch (err: any) {
           if (err?.name === 'AbortError') { aborted = true; return; }
           failed++;
@@ -456,30 +543,50 @@ const clientData = JSON.stringify({
     }
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-    offlineDownloading = false;
     offlineAbort = null;
-    if (failed > 0 && !aborted) {
-      console.warn(`Offline download finished with ${failed} failures.`);
-    }
+    // Recount from the cache (handles any race / partial puts) and re-derive mode.
+    offlineMode = offlineCachedCount === offlineAssets.length ? 'complete'
+                : offlineCachedCount === 0 ? 'idle' : 'partial';
+    if (failed > 0 && !aborted) console.warn(`Offline download finished with ${failed} failures.`);
     await refreshOfflineUI();
   }
 
-  offEls.action.addEventListener('click', async () => {
-    if (offlineDownloading) return;
-    const { count, total } = await offlineState();
-    if (count === total && total > 0) {
-      // Complete → ask to clear
-      if (confirm(`Clear cached offline images? (Frees ~${fmtMB(offlineTotalBytes)} MB on this device.)`)) {
-        await caches.delete(OFFLINE_CACHE_NAME);
-        await refreshOfflineUI();
-      }
-      return;
+  // ── Trigger handlers ──
+  offEls.trigger.addEventListener('click', () => {
+    if (typeof offEls.dialog.showModal === 'function') {
+      offEls.dialog.showModal();
+    } else {
+      offEls.dialog.setAttribute('open', '');
     }
-    startOfflineDownload();
+    renderDialog();
   });
 
-  offEls.cancel.addEventListener('click', () => {
-    if (offlineAbort) offlineAbort.abort();
+  offEls.close.addEventListener('click', () => offEls.dialog.close());
+
+  // Click-on-backdrop closes the dialog.
+  offEls.dialog.addEventListener('click', e => {
+    if (e.target === offEls.dialog) offEls.dialog.close();
+  });
+
+  offEls.action.addEventListener('click', async () => {
+    switch (offlineMode) {
+      case 'idle':
+      case 'partial':
+        startOfflineDownload();
+        break;
+      case 'downloading':
+        offlineAbort?.abort();
+        break;
+      case 'complete':
+        if (confirm(`Clear cached offline images? (Frees ~${fmtMB(offlineTotalBytes)} MB on this device.)`)) {
+          await caches.delete(OFFLINE_CACHE_NAME);
+          offlineCachedBytes = 0;
+          offlineCachedCount = 0;
+          offlineMode = 'idle';
+          await refreshOfflineUI();
+        }
+        break;
+    }
   });
 
   refreshOfflineUI();
@@ -816,4 +923,20 @@ const clientData = JSON.stringify({
     flex-direction: column;
   }
   #list-view.hidden { display: none; }
+
+  /* Native <dialog> centering and dark backdrop. */
+  dialog.offline-dialog::backdrop {
+    background: rgba(12, 10, 9, 0.7);
+    backdrop-filter: blur(2px);
+  }
+  dialog.offline-dialog {
+    margin: auto;
+  }
+  dialog.offline-dialog[open] {
+    animation: offline-pop 140ms ease-out;
+  }
+  @keyframes offline-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+  }
 </style>
