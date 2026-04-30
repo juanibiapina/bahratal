@@ -15,6 +15,7 @@ The original site spreads route info across ~200 pages with no way to filter by 
 - **Search** — across route, block, and sector names
 - **Topo images** — full-res versions linked from thumbnails, lazy-loaded
 - **Works offline** — service worker pre-caches the app shell + map tiles on first visit; topos are cached as you open them. Once visited online, the whole guide is usable at the crag with no signal.
+- **One-tap full offline pack** — a "Download all topos for offline" button on the home screen pulls every thumbnail and full-res topo (~78 MB / 608 images) into a dedicated cache. Resumable, cancellable, with a live progress bar; "Clear" frees the space.
 - **Installable** — PWA manifest + apple-touch-icon, so it can be added to the home screen and launched fullscreen.
 
 ## Stats

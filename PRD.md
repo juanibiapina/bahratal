@@ -67,6 +67,7 @@ Source: `src/data/bahratal.json`
 - Service worker pre-caches the app shell (HTML, JS, CSS, self-hosted Leaflet, icons) on install.
 - Map raster tiles for the bouldering area (z13–17, ~400 tiles, ~2.5 MB) are bundled in `public/tiles/` and pre-cached in the background after activation.
 - Topo images are cached on first view (cache-first runtime strategy), so once a block has been opened online it stays available offline.
+- For full coverage without browsing, the area-info card has a “Download all topos for offline” button that bulk-fetches every thumbnail + full-res topo (~78 MB / 608 images) into a versionless `bahratal-offline-assets` cache. Resumable on cancel, clearable when complete, with a live progress bar.
 - Navigation requests are network-first with cache fallback so updates show immediately when online but the page still loads with no signal.
 - PWA manifest enables “Add to Home Screen” on iOS and Android, launching standalone with the dark theme color.
 
@@ -100,3 +101,4 @@ Source: `src/data/bahratal.json`
 14. ✅ Pre-fetch and bundle OSM tiles for the area at zoom 13–17.
 15. ✅ Add a service worker that pre-caches the app shell + tiles and runtime-caches images.
 16. ✅ Add PWA manifest, theme color, and apple-touch-icon for install-to-home-screen.
+17. ✅ Add a “Download all topos for offline” button with progress bar, cancel, resume, and clear.

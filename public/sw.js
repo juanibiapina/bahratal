@@ -16,6 +16,9 @@ const CACHE_VERSION = 'v1';
 const SHELL_CACHE = `bahratal-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `bahratal-runtime-${CACHE_VERSION}`;
 const TILES_CACHE = `bahratal-tiles-${CACHE_VERSION}`;
+// Versionless: holds user-opt-in bulk offline assets (thumbnails + full-res topos).
+// Survives CACHE_VERSION bumps so we don't wipe the user's ~80 MB of explicit downloads.
+const OFFLINE_CACHE = 'bahratal-offline-assets';
 
 const BASE = new URL(self.registration.scope).pathname; // e.g. "/bahratal/"
 
@@ -56,7 +59,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    const valid = new Set([SHELL_CACHE, RUNTIME_CACHE, TILES_CACHE]);
+    const valid = new Set([SHELL_CACHE, RUNTIME_CACHE, TILES_CACHE, OFFLINE_CACHE]);
     await Promise.all(keys.filter(k => !valid.has(k)).map(k => caches.delete(k)));
     await self.clients.claim();
     // Don't await: tile pre-cache shouldn't block activation.
@@ -133,13 +136,14 @@ self.addEventListener('fetch', event => {
 });
 
 async function cacheFirst(req, cacheName) {
-  const cache = await caches.open(cacheName);
-  const hit = await cache.match(req);
+  // Multi-cache lookup so we also find user-opt-in offline assets stored by the page.
+  const hit = await caches.match(req);
   if (hit) return hit;
   try {
     const res = await fetch(req);
-    // Only cache successful, basic (same-origin) responses.
-    if (res.ok && res.type === 'basic') {
+    // Skip caching for explicit reload requests (used by the offline-download button to bypass caches).
+    if (res.ok && res.type === 'basic' && req.cache !== 'reload') {
+      const cache = await caches.open(cacheName);
       cache.put(req, res.clone()).catch(() => {});
     }
     return res;
