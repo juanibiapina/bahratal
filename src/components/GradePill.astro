@@ -1,5 +1,5 @@
 ---
-import { GRADE_COLORS } from '../data/helpers';
+import { GRADE_COLORS, gradeFamily } from '../data/helpers';
 
 interface Props {
   grade: string;
@@ -7,7 +7,7 @@ interface Props {
 }
 
 const { grade, gradeGroup } = Astro.props;
-const color = GRADE_COLORS[gradeGroup] || GRADE_COLORS['Unknown'];
+const color = GRADE_COLORS[gradeFamily(gradeGroup)];
 ---
 
 <span

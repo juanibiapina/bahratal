@@ -56,21 +56,25 @@ export interface AreaData {
 
 export const data: AreaData = rawData as AreaData;
 
-export const GRADE_GROUPS = ['4-5', '6a', '6b', '6c', '7a', '7b', '7c', '8a', '8b+'] as const;
+export const GRADE_GROUPS = ['4-5', '6', '7', '8'] as const;
 export type GradeGroup = (typeof GRADE_GROUPS)[number];
 
 export const GRADE_COLORS: Record<string, string> = {
   '4-5': '#22c55e',
-  '6a': '#84cc16',
-  '6b': '#eab308',
-  '6c': '#f97316',
-  '7a': '#ef4444',
-  '7b': '#dc2626',
-  '7c': '#9333ea',
-  '8a': '#6d28d9',
-  '8b+': '#1e1b4b',
+  '6': '#eab308',
+  '7': '#ef4444',
+  '8': '#7c3aed',
   'Unknown': '#78716c',
 };
+
+/** Map a raw grade group (e.g. '6a', '7c', '8b+', '4-5') to its merged family. */
+export function gradeFamily(group: string | undefined | null): string {
+  if (!group) return 'Unknown';
+  if (group === '4-5') return '4-5';
+  const c = group.charAt(0);
+  if (c === '6' || c === '7' || c === '8') return c;
+  return 'Unknown';
+}
 
 export const SECTOR_COLORS: Record<string, string> = {
   "BG'S": '#ef4444',
@@ -101,7 +105,7 @@ export function slugify(name: string): string {
 export function getGradeDistribution(routes: Route[]): Record<string, number> {
   const dist: Record<string, number> = {};
   for (const r of routes) {
-    const g = r.grade_group || 'Unknown';
+    const g = gradeFamily(r.grade_group);
     dist[g] = (dist[g] || 0) + 1;
   }
   return dist;

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Layout from '../layouts/Layout.astro';
-import { data, GRADE_GROUPS, GRADE_COLORS, SECTOR_COLORS, slugify, getGradeDistribution } from '../data/helpers';
+import { data, GRADE_GROUPS, GRADE_COLORS, SECTOR_COLORS, slugify, getGradeDistribution, gradeFamily } from '../data/helpers';
 
 const totalRoutes = data.sectors.reduce((s, sec) => s + sec.route_count, 0);
 const totalBlocks = data.sectors.reduce((s, sec) => s + sec.block_count, 0);
@@ -25,7 +25,7 @@ const gradeGroupCounts: Record<string, number> = {};
 for (const sector of data.sectors) {
   for (const block of sector.blocks) {
     for (const route of block.routes) {
-      const g = route.grade_group || 'Unknown';
+      const g = gradeFamily(route.grade_group);
       gradeGroupCounts[g] = (gradeGroupCounts[g] || 0) + 1;
     }
   }
@@ -135,6 +135,11 @@ const clientData = JSON.stringify({
     <!-- ── List view ── -->
     <div id="list-view" class="space-y-4">
       {data.sectors.map((sector, si) => {
+        const sectorFamilyDist: any = {};
+        for (const g of Object.keys(sector.grade_distribution)) {
+          const f = gradeFamily(g);
+          sectorFamilyDist[f] = (sectorFamilyDist[f] || 0) + sector.grade_distribution[g];
+        }
         return (
           <div class="sector-card bg-stone-900 border border-stone-800 rounded-xl overflow-hidden" data-sector-idx={si}>
 
@@ -161,7 +166,7 @@ const clientData = JSON.stringify({
               {/* Grade bar */}
               <div class="mt-2.5 flex rounded-full overflow-hidden h-1.5 bg-stone-800">
                 {GRADE_GROUPS.map(g => {
-                  const count = sector.grade_distribution[g] || 0;
+                  const count = sectorFamilyDist[g] || 0;
                   if (count === 0) return null;
                   const pct = (count / sector.route_count) * 100;
                   return <div style={`width:${pct}%;background-color:${GRADE_COLORS[g]}`} />;
@@ -220,13 +225,13 @@ const clientData = JSON.stringify({
                         {block.routes.map(route => (
                           <div
                             class="route-row flex items-center gap-2 py-1.5 border-b border-stone-800/30 last:border-b-0"
-                            data-grade-group={route.grade_group}
+                            data-grade-group={gradeFamily(route.grade_group)}
                             data-search={`${route.name} ${block.name} ${sector.name}`.toLowerCase()}
                           >
                             <span class="text-stone-600 text-[11px] font-mono w-5 text-right shrink-0">{route.number}</span>
                             <span
                               class="grade-pill shrink-0"
-                              style={`background-color: ${GRADE_COLORS[route.grade_group] || GRADE_COLORS['Unknown']}`}
+                              style={`background-color: ${GRADE_COLORS[gradeFamily(route.grade_group)]}`}
                             >{route.grade || '?'}</span>
                             <div class="flex-1 min-w-0">
                               <div class="text-sm text-stone-200 truncate">{route.name || '—'}</div>
@@ -286,10 +291,17 @@ const clientData = JSON.stringify({
   const appData = JSON.parse(document.getElementById('app-data')!.textContent!);
 
   const GRADE_COLORS: Record<string, string> = {
-    '4-5': '#22c55e', '6a': '#84cc16', '6b': '#eab308', '6c': '#f97316',
-    '7a': '#ef4444', '7b': '#dc2626', '7c': '#9333ea', '8a': '#6d28d9',
-    '8b+': '#1e1b4b', Unknown: '#78716c',
+    '4-5': '#22c55e', '6': '#eab308', '7': '#ef4444', '8': '#7c3aed',
+    Unknown: '#78716c',
   };
+
+  function gradeFamily(group: string | undefined | null): string {
+    if (!group) return 'Unknown';
+    if (group === '4-5') return '4-5';
+    const c = group.charAt(0);
+    if (c === '6' || c === '7' || c === '8') return c;
+    return 'Unknown';
+  }
 
   // ── Grade filter ──
   document.querySelectorAll<HTMLButtonElement>('.grade-btn').forEach(btn => {
@@ -460,7 +472,7 @@ const clientData = JSON.stringify({
     appData.sectors.forEach((sector: any, si: number) => {
       sector.blocks.forEach((block: any, bi: number) => {
         if (!block.lat || !block.lng) return;
-        const gradeGroups = [...new Set(block.routes.map((r: any) => r.grade_group))] as string[];
+        const gradeGroups = [...new Set(block.routes.map((r: any) => gradeFamily(r.grade_group)))] as string[];
         const marker = L.marker([block.lat, block.lng], {
           icon: L.divIcon({
             html: `<div style="background:${sector.color};width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.5)"></div>`,
@@ -574,7 +586,7 @@ const clientData = JSON.stringify({
     mapMarkers.forEach(m => {
       const d = m._appData;
       const matchCount = d.block.routes.filter((r: any) => {
-        const gm = activeGrade === 'all' || r.grade_group === activeGrade;
+        const gm = activeGrade === 'all' || gradeFamily(r.grade_group) === activeGrade;
         const sm = !searchTerm || `${r.name} ${d.block.name} ${d.sector}`.toLowerCase().includes(searchTerm);
         return gm && sm;
       }).length;
