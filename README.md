@@ -2,7 +2,7 @@
 
 A static, mobile-first bouldering guide for the Bahratal area in Saxon Switzerland (Elbsandstein, Germany), built from data scraped from [gulag-online.de](https://gulag-online.de/bahratal-1.html).
 
-**Live site:** https://juanibiapina.dev/bahratal/
+**Live site:** https://juanm.dev/bahratal/
 
 ## What it does
 
